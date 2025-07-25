@@ -1,14 +1,16 @@
 {
+  "version": 2,
   "functions": {
-    "api/analyze.js": {
-      "maxDuration": 60          // plenty – Browserless is fast
+    "api/**/*.js": {          // any JS file in /api/
+      "maxDuration": 60,      // seconds (default is 10)
+      "memory": 512           // MB (optional – can omit)
     }
   },
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Origin",  "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
       ]
