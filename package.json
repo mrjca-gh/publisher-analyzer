@@ -1,0 +1,13 @@
+{
+  "name": "publisher-analyzer",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel"
+  },
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "node-fetch": "^2.6.7"
+  }
+}
