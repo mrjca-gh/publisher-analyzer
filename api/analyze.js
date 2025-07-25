@@ -29,4 +29,44 @@ module.exports = async (req, res) => {
 
     const result = {
       url,
-      timestamp: new
+      timestamp: new Date().toISOString(),
+      identitySolutions: {},
+      prebid: { detected: false, evidence: [] },
+      scripts: []
+    };
+
+    document.querySelectorAll('script').forEach(script => {
+      const src = script.src || 'inline';
+      const code = script.innerHTML.slice(0, 600);
+
+      const hits = [];
+      const all = [
+        ...Object.values(patterns.identitySolutions).flatMap(s =>
+          s.patterns.map(p => ({ pattern: p, solution: s.name }))
+        ),
+        ...patterns.prebid.patterns.map(p => ({ pattern: p, solution: 'Prebid' }))
+      ];
+
+      all.forEach(({ pattern, solution }) => {
+        if (src.toLowerCase().includes(pattern.toLowerCase()) ||
+            code.toLowerCase().includes(pattern.toLowerCase())) {
+          hits.push({ solution, pattern, src });
+        }
+      });
+
+      if (hits.length) result.scripts.push({ src, hits });
+    });
+
+    // summarise
+    Object.entries(patterns.identitySolutions).forEach(([key, val]) => {
+      const ev = result.scripts.flatMap(s => s.hits.filter(h => h.solution === val.name));
+      result.identitySolutions[key] = { name: val.name, detected: ev.length > 0, evidence: ev };
+    });
+    const prebidEv = result.scripts.flatMap(s => s.hits.filter(h => h.solution === 'Prebid'));
+    if (prebidEv.length) result.prebid = { detected: true, evidence: prebidEv };
+
+    return res.json({ success: true, result });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+};
