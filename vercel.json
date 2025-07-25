@@ -1,9 +1,9 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.js": {          // any JS file in /api/
-      "maxDuration": 60,      // seconds (default is 10)
-      "memory": 512           // MB (optional – can omit)
+    "api/**/*.js": {          
+      "maxDuration": 60,     
+      "memory": 512           
     }
   },
   "headers": [
