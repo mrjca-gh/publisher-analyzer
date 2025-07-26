@@ -1,75 +1,99 @@
-const fetch = require('node-fetch');
-const { JSDOM } = require('jsdom');
-const patterns = require('../lib/detectionPatterns');
+const chromium = require('@sparticuz/chromium');
+const puppeteer = require('puppeteer-core');
+const PublisherAnalyzer = require('../lib/analyzer');
 
 module.exports = async (req, res) => {
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();  
+    res.status(200).end();
+    return;
   }
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'POST only' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-  const { url } = req.body || {};
-  if (!url) {
-    return res.status(400).json({ success: false, error: 'Missing url' });
+
+  const { url, urls } = req.body;
+
+  if (!url && !urls) {
+    return res.status(400).json({ error: 'URL or URLs array required' });
   }
 
   try {
-    /* ---------- Fetch rendered HTML via ScrapingBee ---------- */
-    const API = 'https://app.scrapingbee.com/api/v1/';
-    const KEY = process.env.SCRAPINGBEE_KEY;
+    // Launch browser with Vercel-compatible settings
+    const browser = await puppeteer.launch({
+      args: [
+        ...chromium.args,
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process',
+        '--disable-extensions'
+      ],
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: 'new',
+      ignoreHTTPSErrors: true
+    });
 
-    const beeResp = await fetch(
-      `${API}?api_key=${KEY}&url=${encodeURIComponent(url)}&render_js=true`,
-      { headers: { 'Cache-Control': 'no-cache' } }
-    );
-
-    if (!beeResp.ok) throw new Error(`ScrapingBee ${beeResp.status}: ${await beeResp.text()}`);
-    const html = await beeResp.text();
-
-    /* ---------- Analyse ---------- */
-    const { document } = new JSDOM(html).window;
-
-    const result = {
-      url,
-      timestamp: new Date().toISOString(),
-      identitySolutions: {},
-      prebid: { detected: false, evidence: [] },
-      scripts: []
-    };
-
-    document.querySelectorAll('script').forEach(script => {
-      const src = script.src || 'inline';
-      const code = script.innerHTML.slice(0, 600);
-
-      const hits = [];
-      const all = [
-        ...Object.values(patterns.identitySolutions).flatMap(s =>
-          s.patterns.map(p => ({ pattern: p, solution: s.name }))
-        ),
-        ...patterns.prebid.patterns.map(p => ({ pattern: p, solution: 'Prebid' }))
-      ];
-
-      all.forEach(({ pattern, solution }) => {
-        if (src.toLowerCase().includes(pattern.toLowerCase()) ||
-            code.toLowerCase().includes(pattern.toLowerCase())) {
-          hits.push({ solution, pattern, src });
+    const analyzer = new PublisherAnalyzer(browser);
+    const results = [];
+    
+    // Handle single URL or multiple URLs
+    const urlList = urls || [url];
+    
+    for (const targetUrl of urlList) {
+      try {
+        const result = await analyzer.analyze(targetUrl);
+        results.push(result);
+        // Add small delay between analyses
+        if (urlList.length > 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      } catch (error) {
+        console.error(`Error analyzing ${targetUrl}:`, error);
+        results.push({
+          url: targetUrl,
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    await browser.close();
+
+    // Return results based on request type
+    if (urls) {
+      // Multiple URLs - return array
+      res.status(200).json({
+        success: true,
+        results: results,
+        timestamp: new Date().toISOString()
       });
+    } else {
+      // Single URL - return single result
+      res.status(200).json({
+        success: true,
+        result: results[0],
+        timestamp: new Date().toISOString()
+      });
+    }
 
-      if (hits.length) result.scripts.push({ src, hits });
+  } catch (error) {
+    console.error('Analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
-
-    // summarise
-    Object.entries(patterns.identitySolutions).forEach(([key, val]) => {
-      const ev = result.scripts.flatMap(s => s.hits.filter(h => h.solution === val.name));
-      result.identitySolutions[key] = { name: val.name, detected: ev.length > 0, evidence: ev };
-    });
-    const prebidEv = result.scripts.flatMap(s => s.hits.filter(h => h.solution === 'Prebid'));
-    if (prebidEv.length) result.prebid = { detected: true, evidence: prebidEv };
-
-    return res.json({ success: true, result });
-  } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
   }
 };
