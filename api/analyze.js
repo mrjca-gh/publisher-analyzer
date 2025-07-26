@@ -3,13 +3,11 @@ const puppeteer = require('puppeteer-core');
 const PublisherAnalyzer = require('../lib/analyzer');
 
 module.exports = async (req, res) => {
-  // Set CORS headers for all responses
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
@@ -18,7 +16,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
-
+  
   const { url, urls } = req.body;
 
   if (!url && !urls) {
