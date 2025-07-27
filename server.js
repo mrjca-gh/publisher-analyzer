@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const PublisherAnalyzer = require('./analyzer');
+const PublisherAnalyzer = require('./lib/analyzer');  // Updated path
 
 const app = express();
 app.use(cors());
